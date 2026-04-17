@@ -75,6 +75,7 @@ def skip_by_title(title: str) -> bool:
 # ---------------------------------------------------------------------------
 
 NAME_STRIP_RE = re.compile(r"^(Dr\.?|Prof\.?|Professor)\s+", re.IGNORECASE)
+PAREN_RE      = re.compile(r"\s*\([^)]*\)")   # strip "(Jan.08)", "(cross-appt)", etc.
 WHITESPACE_RE = re.compile(r"\s+")
 
 # Words that should never appear in a valid faculty name link
@@ -89,6 +90,7 @@ NON_NAME_WORDS = {
 def clean_name(raw: str) -> str:
     raw = WHITESPACE_RE.sub(" ", raw).strip().rstrip(".,;:")
     raw = NAME_STRIP_RE.sub("", raw)
+    raw = PAREN_RE.sub("", raw)
     return raw.strip()
 
 

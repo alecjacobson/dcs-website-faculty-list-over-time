@@ -45,14 +45,16 @@ class FacultyRecord:
 # Name normalisation for fuzzy comparison
 # ---------------------------------------------------------------------------
 
-PUNCT_RE  = re.compile(r"['\-\.\,]")
+HYPHEN_RE = re.compile(r"-")
+PUNCT_RE  = re.compile(r"['\.\,]")
 SPACE_RE  = re.compile(r"\s+")
 TITLE_RE  = re.compile(r"^(dr|prof|professor|mr|ms|mrs)\s+", re.IGNORECASE)
 
 
 def normalise(name: str) -> str:
-    """Lower-case, remove punctuation and honorifics, collapse whitespace."""
+    """Lower-case, replace hyphens with spaces, remove punctuation and honorifics."""
     name = TITLE_RE.sub("", name.lower())
+    name = HYPHEN_RE.sub(" ", name)   # "Demke-Brown" → "Demke Brown" before punct strip
     name = PUNCT_RE.sub("", name)
     name = SPACE_RE.sub(" ", name).strip()
     return name
@@ -144,6 +146,22 @@ def main():
                     print(f"  {timestamp}  NEW    '{name}'  ({stream})")
 
     latest = max(all_timestamps) if all_timestamps else ""
+
+    # Apply profile-scraped stream overrides (teaching only — we never downgrade to research)
+    profile_path = Path("data/profile_streams.json")
+    if profile_path.exists():
+        overrides = json.loads(profile_path.read_text())
+        applied = 0
+        for canon_name, info in overrides.items():
+            match = best_match(canon_name, records, args.threshold)
+            if match and info.get("stream") == "teaching":
+                if records[match].stream != "teaching":
+                    records[match].stream = "teaching"
+                    applied += 1
+                    if args.verbose:
+                        print(f"  PROFILE OVERRIDE  '{match}' → teaching  ({info.get('source_url','')})")
+        if applied:
+            print(f"  Applied {applied} teaching stream overrides from {profile_path}")
 
     print(f"\nFound {len(records)} unique faculty members across {len(parsed_files)} snapshots")
 

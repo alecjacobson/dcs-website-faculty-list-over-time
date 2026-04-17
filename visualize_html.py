@@ -65,22 +65,51 @@ def build_wayback_map() -> dict[str, str]:
     return wayback
 
 
-def stream_confidence(row) -> str:
-    last_year = int(str(row["last_seen"])[:4])
+PROFILE_STREAMS = Path("data/profile_streams.json")
+
+
+def load_profile_sources() -> dict[str, str]:
+    """Return canonical_name → source ('manual' | 'profile') from profile_streams.json."""
+    if not PROFILE_STREAMS.exists():
+        return {}
+    data = json.loads(PROFILE_STREAMS.read_text())
+    return {name: info.get("source", "profile") for name, info in data.items()}
+
+
+def stream_confidence(row, profile_sources: dict) -> str:
+    last_seen_yyyymm = int(str(row["last_seen"])[:6])
     stream = row["stream"]
+    name = row["canonical_name"]
+
+    src = profile_sources.get(name)
+    if src == "manual":
+        return "manual override"
+    if src == "profile" and stream == "teaching":
+        return "profile-confirmed"
+
+    # Teaching stream: title text always says "Teaching Stream" explicitly → confirmed
     if stream == "teaching":
         return "confirmed"
-    if last_year >= 2021:
+
+    # Research stream confirmed by directory structure:
+    #   - 2021+: modern site with clear h2 section headers
+    #   - 2018-11+: faculty.htm gained h2 stream sections
+    #   Both definitively place the person in research (not teaching)
+    if last_seen_yyyymm >= 201811:
         return "confirmed"
-    if last_year >= 2009:
+
+    # 2009–2018-10: faculty.htm era, stream inferred from title keywords
+    if last_seen_yyyymm >= 200900:
         return "inferred"
+
     return "uncertain"
 
 
 def load_data():
     df = pd.read_csv(TIMELINE_CSV)
+    profile_sources = load_profile_sources()
     wayback = build_wayback_map()
-    df["stream_confidence"] = df.apply(stream_confidence, axis=1)
+    df["stream_confidence"] = df.apply(lambda r: stream_confidence(r, profile_sources), axis=1)
     df["first_label"] = df["first_seen"].apply(lambda s: yyyymm_to_label(str(s)))
     df["last_label"]  = df["last_seen"].apply(lambda s: yyyymm_to_label(str(s)))
     df["first_year"]  = df["first_seen"].astype(str).str[:4].astype(int)
@@ -160,9 +189,11 @@ def generate_html(df, monthly_counts, years, arrivals, departures, output_path: 
     for _, row in df.sort_values("canonical_name").iterrows():
         conf = row["stream_confidence"]
         conf_badge = {
-            "confirmed": '<span class="badge badge-confirmed">confirmed</span>',
-            "inferred":  '<span class="badge badge-inferred">inferred</span>',
-            "uncertain": '<span class="badge badge-uncertain">uncertain</span>',
+            "confirmed":          '<span class="badge badge-confirmed">confirmed</span>',
+            "profile-confirmed":  '<span class="badge badge-profile-confirmed">profile-confirmed</span>',
+            "inferred":           '<span class="badge badge-inferred">inferred</span>',
+            "uncertain":          '<span class="badge badge-uncertain">uncertain</span>',
+            "manual override":    '<span class="badge badge-manual-override">manual override</span>',
         }[conf]
         stream_str = row["stream"] if row["stream"] in ("research", "teaching") else "unknown"
         status = "current" if row["currently_listed"] else "departed"
@@ -341,9 +372,11 @@ def generate_html(df, monthly_counts, years, arrivals, departures, output_path: 
     display: inline-block; font-size: 0.7rem; padding: 1px 6px;
     border-radius: 10px; font-weight: 500; white-space: nowrap;
   }}
-  .badge-confirmed {{ background: #d1e7dd; color: #0a3622; }}
-  .badge-inferred  {{ background: #fff3cd; color: #664d03; }}
-  .badge-uncertain {{ background: #f8d7da; color: #58151c; }}
+  .badge-confirmed         {{ background: #d1e7dd; color: #0a3622; }}
+  .badge-profile-confirmed {{ background: #cfe2ff; color: #084298; }}
+  .badge-inferred          {{ background: #fff3cd; color: #664d03; }}
+  .badge-uncertain         {{ background: #f8d7da; color: #58151c; }}
+  .badge-manual-override   {{ background: #e2d9f3; color: #3d0a91; }}
 
   .no-results {{ text-align: center; color: #6c757d; padding: 32px; font-style: italic; }}
   td a {{ color: #0d6efd; text-decoration: none; }}
