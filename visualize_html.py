@@ -26,6 +26,13 @@ from rapidfuzz import fuzz, process
 PARSED_DIR   = Path("data/parsed")
 TIMELINE_CSV = Path("data/faculty_timeline.csv")
 
+SLUG_URLS = {
+    "index_section95":     "http://web.cs.toronto.edu/dcs/index.php?section=95",
+    "faculty_htm":         "http://web.cs.toronto.edu/people/faculty.htm",
+    "contact_faculty_dir": "http://web.cs.toronto.edu/contact-us/faculty-directory",
+    "people_faculty_dir":  "http://web.cs.toronto.edu/people/faculty-directory",
+}
+
 
 def yyyymm_to_date(s: str) -> datetime:
     return datetime.strptime(str(s)[:6], "%Y%m")
@@ -34,6 +41,21 @@ def yyyymm_to_date(s: str) -> datetime:
 def yyyymm_to_label(s: str) -> str:
     d = yyyymm_to_date(s)
     return d.strftime("%b %Y")
+
+
+def build_wayback_map() -> dict[str, str]:
+    """Return YYYYMM → full Wayback URL, derived from parsed filenames."""
+    wayback = {}
+    for jf in PARSED_DIR.glob("*.json"):
+        m = re.match(r"(\d{14})_(\w+)\.json", jf.name)
+        if not m:
+            continue
+        full_ts, slug = m.group(1), m.group(2)
+        yyyymm = full_ts[:6]
+        base = SLUG_URLS.get(slug, "")
+        if base:
+            wayback[yyyymm] = f"https://web.archive.org/web/{full_ts}/{base}"
+    return wayback
 
 
 def stream_confidence(row) -> str:
@@ -50,11 +72,13 @@ def stream_confidence(row) -> str:
 
 def load_data():
     df = pd.read_csv(TIMELINE_CSV)
+    wayback = build_wayback_map()
     df["stream_confidence"] = df.apply(stream_confidence, axis=1)
     df["first_label"] = df["first_seen"].apply(lambda s: yyyymm_to_label(str(s)))
     df["last_label"]  = df["last_seen"].apply(lambda s: yyyymm_to_label(str(s)))
     df["first_year"]  = df["first_seen"].astype(str).str[:4].astype(int)
     df["last_year"]   = df["last_seen"].astype(str).str[:4].astype(int)
+    df["first_wayback"] = df["first_seen"].apply(lambda s: wayback.get(str(s)[:6], ""))
     return df
 
 
@@ -141,6 +165,7 @@ def generate_html(df, monthly_counts, years, arrivals, departures, output_path: 
             "conf":        conf,
             "conf_badge":  conf_badge,
             "first":       row["first_label"],
+            "first_url":   row["first_wayback"],
             "first_sort":  str(row["first_seen"])[:6],
             "last":        row["last_label"],
             "last_sort":   str(row["last_seen"])[:6],
@@ -314,6 +339,8 @@ def generate_html(df, monthly_counts, years, arrivals, departures, output_path: 
   .badge-uncertain {{ background: #f8d7da; color: #58151c; }}
 
   .no-results {{ text-align: center; color: #6c757d; padding: 32px; font-style: italic; }}
+  td a {{ color: #0d6efd; text-decoration: none; }}
+  td a:hover {{ text-decoration: underline; }}
 </style>
 </head>
 <body>
@@ -557,7 +584,7 @@ function renderTable(rows) {{
       <td>${{r.name}}</td>
       <td class="stream-${{r.stream}}">${{r.stream}}</td>
       <td>${{r.conf_badge}}</td>
-      <td>${{r.first}}</td>
+      <td>${{r.first_url ? `<a href="${{r.first_url}}" target="_blank">${{r.first}}</a>` : r.first}}</td>
       <td>${{r.last}}</td>
       <td class="status-${{r.status}}">${{r.status}}</td>
       <td>${{r.snapshots}}</td>
