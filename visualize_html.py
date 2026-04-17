@@ -43,18 +43,25 @@ def yyyymm_to_label(s: str) -> str:
     return d.strftime("%b %Y")
 
 
+LIVE_URL = "https://web.cs.toronto.edu/people/faculty-directory"
+
+
 def build_wayback_map() -> dict[str, str]:
-    """Return YYYYMM → full Wayback URL, derived from parsed filenames."""
+    """Return YYYYMM → URL, derived from parsed filenames."""
     wayback = {}
     for jf in PARSED_DIR.glob("*.json"):
+        # Wayback snapshot: 14-digit timestamp + slug
         m = re.match(r"(\d{14})_(\w+)\.json", jf.name)
-        if not m:
+        if m:
+            full_ts, slug = m.group(1), m.group(2)
+            base = SLUG_URLS.get(slug, "")
+            if base:
+                wayback[full_ts[:6]] = f"https://web.archive.org/web/{full_ts}/{base}"
             continue
-        full_ts, slug = m.group(1), m.group(2)
-        yyyymm = full_ts[:6]
-        base = SLUG_URLS.get(slug, "")
-        if base:
-            wayback[yyyymm] = f"https://web.archive.org/web/{full_ts}/{base}"
+        # Live snapshot: YYYYMM_live.json
+        m = re.match(r"(\d{6})_live\.json", jf.name)
+        if m:
+            wayback[m.group(1)] = LIVE_URL
     return wayback
 
 
