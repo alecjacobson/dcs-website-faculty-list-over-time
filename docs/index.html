@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UofT CS Faculty Change Over Time</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f8f9fa; color: #212529; line-height: 1.5;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: #6c757d; margin-bottom: 12px; }
+  .methodology {
+    font-size: 0.875rem; color: #495057; line-height: 1.6;
+    background: #f1f3f5; border-left: 3px solid #ced4da;
+    padding: 10px 14px; border-radius: 0 6px 6px 0;
+    margin-bottom: 28px;
+  }
+  .methodology a { color: #0d6efd; text-decoration: none; }
+  .methodology a:hover { text-decoration: underline; }
+  h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 12px; color: #343a40; }
+
+  .stats-row {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px;
+  }
+  .stat-card {
+    background: white; border-radius: 8px; padding: 16px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1); min-width: 140px;
+  }
+  .stat-card .num { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .stat-card .label { font-size: 0.8rem; color: #6c757d; margin-top: 4px; }
+  .stat-card.blue .num { color: #1f77b4; }
+  .stat-card.orange .num { color: #ff7f0e; }
+  .stat-card.green .num { color: #2ca02c; }
+  .stat-card.gray .num { color: #555; }
+
+  .card {
+    background: white; border-radius: 8px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.1); margin-bottom: 28px;
+  }
+
+  .chart-note {
+    font-size: 0.8rem; color: #6c757d; margin-top: 8px; font-style: italic;
+  }
+
+  /* Table controls */
+  .table-controls {
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: center;
+  }
+  .table-controls input {
+    border: 1px solid #ced4da; border-radius: 6px; padding: 6px 12px;
+    font-size: 0.9rem; outline: none; width: 220px;
+  }
+  .table-controls input:focus { border-color: #86b7fe; box-shadow: 0 0 0 3px rgba(13,110,253,.15); }
+  .filter-btn {
+    border: 1px solid #ced4da; background: white; border-radius: 6px;
+    padding: 5px 12px; font-size: 0.85rem; cursor: pointer; color: #495057;
+    transition: all .15s;
+  }
+  .filter-btn:hover { background: #e9ecef; }
+  .filter-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
+  .table-count { color: #6c757d; font-size: 0.85rem; margin-left: auto; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 0.875rem;
+  }
+  th {
+    background: #f8f9fa; border-bottom: 2px solid #dee2e6;
+    padding: 8px 12px; text-align: left; white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+  }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { background: #e9ecef; }
+  th .sort-icon { color: #adb5bd; margin-left: 4px; font-size: 0.75rem; }
+  th.sort-asc .sort-icon::after { content: "▲"; color: #0d6efd; }
+  th.sort-desc .sort-icon::after { content: "▼"; color: #0d6efd; }
+  th:not(.sort-asc):not(.sort-desc) .sort-icon::after { content: "⇅"; }
+  td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8f9fa; }
+
+  .stream-research { color: #1f77b4; font-weight: 500; }
+  .stream-teaching { color: #ff7f0e; font-weight: 500; }
+  .stream-unknown  { color: #aaa; }
+
+  .status-current  { color: #198754; font-weight: 500; }
+  .status-departed { color: #6c757d; }
+
+  .badge {
+    display: inline-block; font-size: 0.7rem; padding: 1px 6px;
+    border-radius: 10px; font-weight: 500; white-space: nowrap;
+  }
+  .badge-confirmed { background: #d1e7dd; color: #0a3622; }
+  .badge-inferred  { background: #fff3cd; color: #664d03; }
+  .badge-uncertain { background: #f8d7da; color: #58151c; }
+
+  .no-results { text-align: center; color: #6c757d; padding: 32px; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>UofT CS Faculty Change Over Time</h1>
+  <p class="subtitle">Department of Computer Science, University of Toronto &mdash; 2007&ndash;present</p>
+
+  <p class="methodology">
+    Data was collected from archived snapshots of the UofT CS faculty directory via the
+    <a href="https://web.archive.org" target="_blank">Wayback Machine</a>, covering
+    roughly one snapshot per month from November 2007 to the present.
+    &ldquo;Appearance&rdquo; and &ldquo;departure&rdquo; refer to when a person&rsquo;s
+    name was first or last visible on the department website &mdash; <em>not</em>
+    necessarily their actual hiring or departure dates.
+    Stream classification (research vs. teaching) is drawn from section headers and
+    title strings on the modern site (2021+); earlier snapshots are inferred from
+    title keywords or, for pre-2009 data, may be uncertain.
+    The &ldquo;&le;2007&rdquo; cohort represents the 69 faculty already listed when
+    data collection began; their true start dates predate these records.
+    Vibe coded with Claude Code.
+    Source on <a href="https://github.com/alecjacobson/dcs-website-faculty-list-over-time" target="_blank">GitHub</a>.
+  </p>
+
+  <div class="stats-row">
+    <div class="stat-card gray">
+      <div class="num">158</div>
+      <div class="label">Total unique faculty</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="num">137</div>
+      <div class="label">Research stream</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="num">21</div>
+      <div class="label">Teaching stream</div>
+    </div>
+    <div class="stat-card green">
+      <div class="num">97</div>
+      <div class="label">Currently listed</div>
+    </div>
+    <div class="stat-card gray">
+      <div class="num">132</div>
+      <div class="label">Snapshots (2007&ndash;now)</div>
+    </div>
+  </div>
+
+  <!-- Chart 1: Arrivals & Departures -->
+  <div class="card">
+    <h2>Annual Arrivals &amp; Departures</h2>
+    <div id="chart-arrivals" style="height:420px;"></div>
+    <p class="chart-note">
+      Hover bars to see names. &ldquo;&le;2007&rdquo; shows the 69 faculty already listed when data collection began &mdash; their actual start dates predate our records.
+      Departures show the last year a person appeared in the directory.
+    </p>
+  </div>
+
+  <!-- Chart 2: Count over time -->
+  <div class="card">
+    <h2>Faculty Count Over Time</h2>
+    <div id="chart-count" style="height:380px;"></div>
+    <p class="chart-note">
+      Monthly snapshots from the Wayback Machine. Gaps between eras reflect URL changes on the CS website.
+      "Unknown" = snapshots from the 2007&ndash;2008 era that did not distinguish streams.
+      The large drop in 2018&ndash;2019 reflects a website redesign that reorganised the directory structure.
+    </p>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <h2>Faculty Directory</h2>
+    <div class="table-controls">
+      <input type="text" id="search" placeholder="Search name…" oninput="applyFilters()">
+      <button class="filter-btn active" data-stream="all"    onclick="setStreamFilter(this)">All</button>
+      <button class="filter-btn"        data-stream="research" onclick="setStreamFilter(this)">Research</button>
+      <button class="filter-btn"        data-stream="teaching" onclick="setStreamFilter(this)">Teaching</button>
+      <button class="filter-btn active" data-status="all"    onclick="setStatusFilter(this, 'status')">All status</button>
+      <button class="filter-btn"        data-status="current"  onclick="setStatusFilter(this, 'status')">Current</button>
+      <button class="filter-btn"        data-status="departed" onclick="setStatusFilter(this, 'status')">Departed</button>
+      <span class="table-count" id="table-count"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="faculty-table">
+        <thead>
+          <tr>
+            <th class="sortable" data-col="name">Name<span class="sort-icon"></span></th>
+            <th class="sortable" data-col="stream">Stream<span class="sort-icon"></span></th>
+            <th>Stream confidence</th>
+            <th class="sortable" data-col="first_sort">First seen<span class="sort-icon"></span></th>
+            <th class="sortable" data-col="last_sort">Last seen<span class="sort-icon"></span></th>
+            <th class="sortable" data-col="status">Status<span class="sort-icon"></span></th>
+            <th class="sortable" data-col="snapshots" title="Number of monthly snapshots this person appeared in">Snapshots<span class="sort-icon"></span></th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div class="no-results" id="no-results" style="display:none;">No matching faculty.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---- Data ----
+const ROWS = [{"name": "Aaron Hertzmann", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jul 2013", "last_sort": "201307", "status": "departed", "snapshots": 41}, {"name": "Akshayaram Srinivasan", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Alec Jacobson", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2016", "first_sort": "201607", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 67}, {"name": "Aleksandar Nikolov", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2015", "first_sort": "201510", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 76}, {"name": "Alex Mariakakis", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Alice Gao", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Allan Borodin", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Allan Jepson", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2021", "last_sort": "202104", "status": "departed", "snapshots": 100}, {"name": "Al\u00e1n Aspuru Guzik", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Amir Chinaei", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Feb 2016", "first_sort": "201602", "last": "Sep 2017", "last_sort": "201709", "status": "departed", "snapshots": 15}, {"name": "Amir-massoud Farahmand", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Apr 2024", "first_sort": "202404", "last": "Oct 2024", "last_sort": "202410", "status": "departed", "snapshots": 7}, {"name": "Angela Brown", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Angela Demke Brown", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jun 2018", "first_sort": "201806", "last": "Jul 2019", "last_sort": "201907", "status": "departed", "snapshots": 14}, {"name": "Angela Demke-Brown", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "May 2018", "last_sort": "201805", "status": "departed", "snapshots": 83}, {"name": "Animesh Garg", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2018", "first_sort": "201810", "last": "May 2023", "last_sort": "202305", "status": "departed", "snapshots": 23}, {"name": "Anna Goldenberg", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2022", "first_sort": "202210", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 27}, {"name": "Annie En-Shiun Lee", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "May 2023", "last_sort": "202305", "status": "departed", "snapshots": 2}, {"name": "Anthony Bonner", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Anwar Hithnawi", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Sep 2024", "first_sort": "202409", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 16}, {"name": "Arvind Gupta", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Jul 2019", "last_sort": "201907", "status": "departed", "snapshots": 12}, {"name": "Ashton Anderson", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Aviad Levis", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Avner Magen", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jun 2010", "last_sort": "201006", "status": "departed", "snapshots": 11}, {"name": "Azadeh Farzan", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2008", "first_sort": "200810", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 129}, {"name": "Bahar Aameri", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Apr 2024", "first_sort": "202404", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 21}, {"name": "Ben Rossman", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2016", "first_sort": "201607", "last": "May 2023", "last_sort": "202305", "status": "departed", "snapshots": 45}, {"name": "Bianca (Jan.08) Schroeder", "stream": "research", "conf": "uncertain", "conf_badge": "<span class=\"badge badge-uncertain\">uncertain</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Dec 2007", "last_sort": "200712", "status": "departed", "snapshots": 2}, {"name": "Bianca Schroeder", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Feb 2008", "first_sort": "200802", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 130}, {"name": "Bo Wang", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Dec 2020", "first_sort": "202012", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 34}, {"name": "Bogdan Simion", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Oct 2015", "first_sort": "201510", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 32}, {"name": "Carolina Nobre", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2022", "first_sort": "202211", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 26}, {"name": "Charles Rackoff", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Chris Maddison", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Christina Christara", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Colin Raffel", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Craig Boutilier", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jan 2018", "last_sort": "201801", "status": "departed", "snapshots": 79}, {"name": "Dan Heap", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "May 2023", "last_sort": "202305", "status": "departed", "snapshots": 110}, {"name": "Daniel Wigdor", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2011", "first_sort": "201103", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 114}, {"name": "David Duvenaud", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2016", "first_sort": "201607", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 67}, {"name": "David Fleet", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "David Levin", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2016", "first_sort": "201607", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 67}, {"name": "David Lindell", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2022", "first_sort": "202210", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 27}, {"name": "David Liu", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2015", "first_sort": "201501", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 85}, {"name": "David Wortman", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Derek Corneil", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Diane Horton", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Eitan Grinspun", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Eugene Fiume", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Eyal de Lara", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Fahiem Bacchus", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jun 2022", "last_sort": "202206", "status": "departed", "snapshots": 105}, {"name": "Faith Ellen", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Fan Long", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Fanny Chevalier", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Feb 2018", "first_sort": "201802", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 53}, {"name": "Florian Shkurti", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Fran\u00e7ois Pitt", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Gary Baumgartner", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Gennady Pekhimenko", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Geoffrey Hinton", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Gerald Penn", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Graeme Hirst", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Dec 2022", "last_sort": "202212", "status": "departed", "snapshots": 108}, {"name": "Greg Wilson", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Sep 2010", "last_sort": "201009", "status": "departed", "snapshots": 14}, {"name": "Gururaj Saileshwar", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2022", "first_sort": "202210", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 27}, {"name": "Hector Levesque", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Henry Yuen", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Jun 2022", "last_sort": "202206", "status": "departed", "snapshots": 20}, {"name": "Igor Gilitschenski", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Apr 2022", "first_sort": "202204", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 29}, {"name": "Ishtiaque Ahmed", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Jakob Foerster", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2021", "last_sort": "202104", "status": "departed", "snapshots": 3}, {"name": "Jaqueline Smith", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2015", "first_sort": "201510", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 76}, {"name": "Jennifer Campbell", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Jessica Burgner-Kahrs", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2018", "first_sort": "201810", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 45}, {"name": "Jim Clarke", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Jimmy Ba", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Joey Freund", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Oct 2015", "first_sort": "201510", "last": "Sep 2017", "last_sort": "201709", "status": "departed", "snapshots": 19}, {"name": "John Danahy", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jun 2016", "last_sort": "201606", "status": "departed", "snapshots": 65}, {"name": "John Mylopoulos", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Jonathan Calver", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Joseph Williams", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Karan Singh", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Karen Reid", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Kelly Gotlieb", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Nov 2016", "last_sort": "201611", "status": "departed", "snapshots": 70}, {"name": "Ken Jackson", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jul 2019", "last_sort": "201907", "status": "departed", "snapshots": 97}, {"name": "Khai Truong", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Kirill Serkh", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Kuei (Jack) Sun", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "May 2023", "first_sort": "202305", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 23}, {"name": "Kuldeep Meel", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Kyros Kutulakos", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Larry Yueli Zhang", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jan 2015", "first_sort": "201501", "last": "Sep 2015", "last_sort": "201509", "status": "departed", "snapshots": 9}, {"name": "Leonid Libkin", "stream": "research", "conf": "uncertain", "conf_badge": "<span class=\"badge badge-uncertain\">uncertain</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Feb 2008", "last_sort": "200802", "status": "departed", "snapshots": 3}, {"name": "Lisa Strug", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Dec 2020", "first_sort": "202012", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 34}, {"name": "Lueder Kahrs", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Jun 2022", "last_sort": "202206", "status": "departed", "snapshots": 8}, {"name": "Marina Tawfik", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2025", "first_sort": "202510", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 3}, {"name": "Mario Badr", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Mark Braverman", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Oct 2010", "first_sort": "201010", "last": "Oct 2012", "last_sort": "201210", "status": "departed", "snapshots": 23}, {"name": "Marsha Chechik", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Maryam Mehri Dehnavi", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Marzyeh Ghassemi", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Dec 2022", "last_sort": "202212", "status": "departed", "snapshots": 23}, {"name": "Mat Zaleski", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Oct 2015", "first_sort": "201510", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 32}, {"name": "Matt Medland", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "May 2017", "first_sort": "201705", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 18}, {"name": "Michael Brudno", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Michael Guerzhoy", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jan 2015", "first_sort": "201501", "last": "Sep 2017", "last_sort": "201709", "status": "departed", "snapshots": 28}, {"name": "Michael Molloy", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Michelle Wahl Craig", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Mohamed Mansour", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jan 2015", "first_sort": "201501", "last": "Sep 2015", "last_sort": "201509", "status": "departed", "snapshots": 9}, {"name": "Moshe Gabel", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Jun 2022", "last_sort": "202206", "status": "departed", "snapshots": 8}, {"name": "Murat Erdogdu", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Nandita Vijaykumar", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Nick Koudas", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Ningning Xie", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Nisarg Shah", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Niv Dayan", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2022", "first_sort": "202210", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 27}, {"name": "Pat Hume", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "May 2013", "last_sort": "201305", "status": "departed", "snapshots": 40}, {"name": "Paul Gries", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Paul He", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2024", "first_sort": "202407", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 18}, {"name": "Peter Marbach", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Qizhen Zhang", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2022", "first_sort": "202211", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 26}, {"name": "Radford Neal", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Rahul G. Krishnan", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jun 2024", "first_sort": "202406", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 19}, {"name": "Raquel Urtasun", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Feb 2014", "first_sort": "201402", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 91}, {"name": "Ravin Balakrishnan", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Ren\u00e9e Miller", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jul 2019", "last_sort": "201907", "status": "departed", "snapshots": 97}, {"name": "Ric Hehner", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Richard Zemel", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Robert Soden", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2020", "first_sort": "202011", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 35}, {"name": "Roei Tell", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Roger Grosse", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jul 2016", "first_sort": "201607", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 67}, {"name": "Ronald Baecker", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Rudi Mathon", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Ruslan Salakhutdinov", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Feb 2014", "first_sort": "201402", "last": "Jul 2016", "last_sort": "201607", "status": "departed", "snapshots": 25}, {"name": "Ryan Johnson", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Mar 2011", "first_sort": "201103", "last": "Dec 2014", "last_sort": "201412", "status": "departed", "snapshots": 29}, {"name": "Ryan Lilien", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Mar 2012", "last_sort": "201203", "status": "departed", "snapshots": 30}, {"name": "Sam Roweis", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jan 2009", "last_sort": "200901", "status": "departed", "snapshots": 7}, {"name": "Sam Toueg", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jul 2019", "last_sort": "201907", "status": "departed", "snapshots": 97}, {"name": "Sanja Fidler", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Feb 2014", "first_sort": "201402", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 91}, {"name": "Scott Graham", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "May 2013", "last_sort": "201305", "status": "departed", "snapshots": 40}, {"name": "Sheila McIlraith", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Shubhangi Saraf", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Stefan Saroiu", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Jan 2009", "last_sort": "200901", "status": "departed", "snapshots": 7}, {"name": "Stephen Cook", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Steve Easterbrook", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Steve Engels", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Steven Coyne", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Sushant Sachdeva", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Suzanne Stevenson", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Sven Dickinson", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Swastik Kopparty", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Jan 2024", "first_sort": "202401", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 22}, {"name": "Tarek Abdelrahman", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Sep 2025", "last_sort": "202509", "status": "departed", "snapshots": 129}, {"name": "Tom Fairgrieve", "stream": "teaching", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Sep 2025", "last_sort": "202509", "status": "departed", "snapshots": 129}, {"name": "Toniann Pitassi", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Tovi Grossman", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2018", "first_sort": "201808", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 47}, {"name": "Varinia Bernales", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Apr 2026", "first_sort": "202604", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 1}, {"name": "Vassos Hadzilacos", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Velian Pandeliev", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jan 2015", "first_sort": "201501", "last": "Jun 2016", "last_sort": "201606", "status": "departed", "snapshots": 18}, {"name": "Vinod Vaikuntanathan", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Jul 2011", "first_sort": "201107", "last": "Jan 2015", "last_sort": "201501", "status": "departed", "snapshots": 26}, {"name": "Wayne Enright", "stream": "research", "conf": "inferred", "conf_badge": "<span class=\"badge badge-inferred\">inferred</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Oct 2018", "last_sort": "201810", "status": "departed", "snapshots": 88}, {"name": "Xujie Si", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Mar 2023", "first_sort": "202303", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 24}, {"name": "Yang Xu", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Aug 2017", "first_sort": "201708", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 59}, {"name": "Yashar Ganjali", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Nov 2007", "first_sort": "200711", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 132}, {"name": "Zhijing Jin", "stream": "research", "conf": "confirmed", "conf_badge": "<span class=\"badge badge-confirmed\">confirmed</span>", "first": "Oct 2024", "first_sort": "202410", "last": "Apr 2026", "last_sort": "202604", "status": "current", "snapshots": 15}];
+const AFTER_LABELS = ["2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"];
+const INIT_R = [59];
+const INIT_T = [10];
+const INIT_R_HOVER = ["<b>59 research faculty already listed:</b><br>Aaron Hertzmann<br>Allan Borodin<br>Allan Jepson<br>Angela Demke-Brown<br>Anthony Bonner<br>Avner Magen<br>Bianca (Jan.08) Schroeder<br>Charles Rackoff<br>Christina Christara<br>Craig Boutilier<br>David Fleet<br>David Wortman<br>Derek Corneil<br>Eugene Fiume<br>Eyal de Lara<br>Fahiem Bacchus<br>Faith Ellen<br>Geoffrey Hinton<br>Gerald Penn<br>Graeme Hirst<br>Greg Wilson<br>Hector Levesque<br>Jim Clarke<br>John Danahy<br>John Mylopoulos<br>Karan Singh<br>Kelly Gotlieb<br>Ken Jackson<br>Khai Truong<br>Kyros Kutulakos<br>Leonid Libkin<br>Marsha Chechik<br>Michael Brudno<br>Michael Molloy<br>Nick Koudas<br>Pat Hume<br>Peter Marbach<br>Radford Neal<br>Ravin Balakrishnan<br>Ren\u00e9e Miller<br>Ric Hehner<br>Richard Zemel<br>Ronald Baecker<br>Rudi Mathon<br>Ryan Lilien<br>Sam Roweis<br>Sam Toueg<br>Scott Graham<br>Sheila McIlraith<br>Stefan Saroiu<br>Stephen Cook<br>Steve Easterbrook<br>Suzanne Stevenson<br>Sven Dickinson<br>Tarek Abdelrahman<br>Toniann Pitassi<br>Vassos Hadzilacos<br>Wayne Enright<br>Yashar Ganjali"];
+const INIT_T_HOVER = ["<b>10 teaching faculty already listed:</b><br>Dan Heap<br>Diane Horton<br>Fran\u00e7ois Pitt<br>Gary Baumgartner<br>Jennifer Campbell<br>Karen Reid<br>Michelle Wahl Craig<br>Paul Gries<br>Steve Engels<br>Tom Fairgrieve"];
+const ARR_R = [2, 0, 1, 3, 0, 0, 3, 8, 6, 7, 15, 0, 11, 0, 7, 3, 11, 0, 1];
+const ARR_T = [0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 5, 2, 1, 0];
+const DEP_R = [-1, -2, -2, 0, -2, -3, -1, -3, -4, -3, -19, -5, 0, -2, -6, -2, -1, -1, 0];
+const DEP_T = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -2, 0, -1, 0];
+const ARR_R_HOVER = ["<b>2 arrivals:</b><br>Azadeh Farzan<br>Bianca Schroeder", "No arrivals", "<b>1 arrival:</b><br>Mark Braverman", "<b>3 arrivals:</b><br>Daniel Wigdor<br>Ryan Johnson<br>Vinod Vaikuntanathan", "No arrivals", "No arrivals", "<b>3 arrivals:</b><br>Raquel Urtasun<br>Ruslan Salakhutdinov<br>Sanja Fidler", "<b>8 arrivals:</b><br>Aleksandar Nikolov<br>Bogdan Simion<br>Joey Freund<br>Larry Yueli Zhang<br>Mat Zaleski<br>Michael Guerzhoy<br>Mohamed Mansour<br>Velian Pandeliev", "<b>6 arrivals:</b><br>Alec Jacobson<br>Amir Chinaei<br>Ben Rossman<br>David Duvenaud<br>David Levin<br>Roger Grosse", "<b>7 arrivals:</b><br>Ashton Anderson<br>Gennady Pekhimenko<br>Ishtiaque Ahmed<br>Matt Medland<br>Nisarg Shah<br>Sushant Sachdeva<br>Yang Xu", "<b>15 arrivals:</b><br>Al\u00e1n Aspuru Guzik<br>Angela Demke Brown<br>Animesh Garg<br>Arvind Gupta<br>Fan Long<br>Fanny Chevalier<br>Florian Shkurti<br>Henry Yuen<br>Jessica Burgner-Kahrs<br>Jimmy Ba<br>Joseph Williams<br>Maryam Mehri Dehnavi<br>Marzyeh Ghassemi<br>Murat Erdogdu<br>Tovi Grossman", "No arrivals", "<b>11 arrivals:</b><br>Alex Mariakakis<br>Angela Brown<br>Bo Wang<br>Chris Maddison<br>Jakob Foerster<br>Kirill Serkh<br>Lisa Strug<br>Lueder Kahrs<br>Moshe Gabel<br>Nandita Vijaykumar<br>Robert Soden", "No arrivals", "<b>7 arrivals:</b><br>Anna Goldenberg<br>Carolina Nobre<br>David Lindell<br>Gururaj Saileshwar<br>Igor Gilitschenski<br>Niv Dayan<br>Qizhen Zhang", "<b>3 arrivals:</b><br>Eitan Grinspun<br>Shubhangi Saraf<br>Xujie Si", "<b>11 arrivals:</b><br>Akshayaram Srinivasan<br>Amir-massoud Farahmand<br>Anwar Hithnawi<br>Aviad Levis<br>Colin Raffel<br>Kuldeep Meel<br>Ningning Xie<br>Rahul G. Krishnan<br>Roei Tell<br>Swastik Kopparty<br>Zhijing Jin", "No arrivals", "<b>1 arrival:</b><br>Varinia Bernales"];
+const ARR_T_HOVER = ["No arrivals", "No arrivals", "No arrivals", "No arrivals", "No arrivals", "No arrivals", "No arrivals", "<b>2 arrivals:</b><br>David Liu<br>Jaqueline Smith", "No arrivals", "No arrivals", "No arrivals", "No arrivals", "<b>1 arrival:</b><br>Mario Badr", "No arrivals", "No arrivals", "<b>5 arrivals:</b><br>Alice Gao<br>Annie En-Shiun Lee<br>Jonathan Calver<br>Kuei (Jack) Sun<br>Steven Coyne", "<b>2 arrivals:</b><br>Bahar Aameri<br>Paul He", "<b>1 arrival:</b><br>Marina Tawfik", "No arrivals"];
+const DEP_R_HOVER = ["<b>1 departure:</b><br>Leonid Libkin", "<b>2 departures:</b><br>Sam Roweis<br>Stefan Saroiu", "<b>2 departures:</b><br>Avner Magen<br>Greg Wilson", "No departures", "<b>2 departures:</b><br>Mark Braverman<br>Ryan Lilien", "<b>3 departures:</b><br>Aaron Hertzmann<br>Pat Hume<br>Scott Graham", "<b>1 departure:</b><br>Ryan Johnson", "<b>3 departures:</b><br>Larry Yueli Zhang<br>Mohamed Mansour<br>Vinod Vaikuntanathan", "<b>4 departures:</b><br>John Danahy<br>Kelly Gotlieb<br>Ruslan Salakhutdinov<br>Velian Pandeliev", "<b>3 departures:</b><br>Amir Chinaei<br>Joey Freund<br>Michael Guerzhoy", "<b>19 departures:</b><br>Angela Demke-Brown<br>Bogdan Simion<br>Charles Rackoff<br>Craig Boutilier<br>David Wortman<br>Derek Corneil<br>Eugene Fiume<br>Geoffrey Hinton<br>Hector Levesque<br>Jim Clarke<br>John Mylopoulos<br>Mat Zaleski<br>Matt Medland<br>Radford Neal<br>Ric Hehner<br>Ronald Baecker<br>Rudi Mathon<br>Stephen Cook<br>Wayne Enright", "<b>5 departures:</b><br>Angela Demke Brown<br>Arvind Gupta<br>Ken Jackson<br>Ren\u00e9e Miller<br>Sam Toueg", "No departures", "<b>2 departures:</b><br>Allan Jepson<br>Jakob Foerster", "<b>6 departures:</b><br>Fahiem Bacchus<br>Graeme Hirst<br>Henry Yuen<br>Lueder Kahrs<br>Marzyeh Ghassemi<br>Moshe Gabel", "<b>2 departures:</b><br>Animesh Garg<br>Ben Rossman", "<b>1 departure:</b><br>Amir-massoud Farahmand", "<b>1 departure:</b><br>Tarek Abdelrahman", "No departures"];
+const DEP_T_HOVER = ["No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "No departures", "<b>2 departures:</b><br>Annie En-Shiun Lee<br>Dan Heap", "No departures", "<b>1 departure:</b><br>Tom Fairgrieve", "No departures"];
+const MC_DATES    = ["2007-11", "2007-12", "2008-02", "2008-10", "2008-11", "2008-12", "2009-01", "2009-09", "2010-04", "2010-05", "2010-06", "2010-07", "2010-08", "2010-09", "2010-10", "2010-11", "2010-12", "2011-01", "2011-03", "2011-04", "2011-05", "2011-06", "2011-07", "2011-08", "2011-09", "2011-10", "2011-11", "2011-12", "2012-01", "2012-03", "2012-04", "2012-05", "2012-06", "2012-07", "2012-08", "2012-09", "2012-10", "2012-12", "2013-03", "2013-05", "2013-07", "2014-02", "2014-08", "2014-09", "2014-10", "2014-11", "2014-12", "2015-01", "2015-02", "2015-03", "2015-04", "2015-05", "2015-06", "2015-07", "2015-08", "2015-09", "2015-10", "2015-11", "2015-12", "2016-01", "2016-02", "2016-03", "2016-04", "2016-05", "2016-06", "2016-07", "2016-08", "2016-09", "2016-10", "2016-11", "2017-05", "2017-06", "2017-07", "2017-08", "2017-09", "2017-10", "2017-11", "2017-12", "2018-01", "2018-02", "2018-03", "2018-04", "2018-05", "2018-06", "2018-07", "2018-08", "2018-09", "2018-10", "2018-11", "2018-12", "2019-01", "2019-02", "2019-03", "2019-04", "2019-05", "2019-06", "2019-07", "2020-11", "2020-12", "2021-04", "2021-10", "2021-11", "2022-01", "2022-04", "2022-06", "2022-10", "2022-11", "2022-12", "2023-03", "2023-05", "2024-01", "2024-04", "2024-05", "2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2026-01", "2026-04"];
+const MC_RESEARCH = [59, 59, 59, 59, 59, 59, 59, 57, 57, 57, 57, 56, 56, 56, 56, 56, 56, 56, 58, 58, 58, 58, 59, 59, 59, 59, 59, 59, 59, 59, 58, 58, 58, 58, 58, 58, 58, 57, 57, 57, 55, 57, 57, 57, 57, 57, 57, 60, 59, 59, 59, 59, 59, 59, 59, 59, 61, 61, 61, 61, 62, 62, 62, 62, 62, 65, 64, 64, 64, 64, 64, 64, 64, 70, 70, 67, 67, 67, 67, 67, 67, 67, 67, 67, 67, 78, 78, 80, 63, 63, 63, 63, 63, 63, 63, 63, 63, 67, 69, 69, 67, 67, 67, 68, 68, 68, 70, 70, 71, 71, 76, 77, 77, 78, 78, 78, 79, 80, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 79, 78, 78, 79];
+const MC_TEACHING = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 17, 18, 16, 17, 17, 17, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18];
+const MC_UNKNOWN  = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+// ---- Arrivals/Departures chart ----
+// ≤2007 initial population uses its own traces (gray, no departures)
+// Regular years (2008+) show arrivals above and departures below the axis
+Plotly.newPlot('chart-arrivals', [
+  {
+    name: 'Pre-2007 research', x: ['≤2007'], y: INIT_R,
+    text: INIT_R_HOVER, hovertemplate: '<b>≤2007 — Research (pre-data)</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#1f77b4', opacity: 0.35, pattern: { shape: '/', size: 6 } },
+    showlegend: true,
+  },
+  {
+    name: 'Pre-2007 teaching', x: ['≤2007'], y: INIT_T,
+    text: INIT_T_HOVER, hovertemplate: '<b>≤2007 — Teaching (pre-data)</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#ff7f0e', opacity: 0.35, pattern: { shape: '/', size: 6 } },
+    showlegend: true,
+  },
+  {
+    name: 'Research arrivals', x: AFTER_LABELS, y: ARR_R,
+    text: ARR_R_HOVER, hovertemplate: '<b>%{x} — Research arrivals</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#1f77b4', opacity: 0.85 },
+  },
+  {
+    name: 'Teaching arrivals', x: AFTER_LABELS, y: ARR_T,
+    text: ARR_T_HOVER, hovertemplate: '<b>%{x} — Teaching arrivals</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#ff7f0e', opacity: 0.85 },
+  },
+  {
+    name: 'Research departures', x: AFTER_LABELS, y: DEP_R,
+    text: DEP_R_HOVER, hovertemplate: '<b>%{x} — Research departures</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#1f77b4', opacity: 0.4, line: { color: '#1f77b4', width: 1 } },
+  },
+  {
+    name: 'Teaching departures', x: AFTER_LABELS, y: DEP_T,
+    text: DEP_T_HOVER, hovertemplate: '<b>%{x} — Teaching departures</b><br>%{text}<extra></extra>',
+    type: 'bar', marker: { color: '#ff7f0e', opacity: 0.4, line: { color: '#ff7f0e', width: 1 } },
+  },
+], {
+  barmode: 'relative',
+  xaxis: { title: 'Year', tickfont: { size: 12 } },
+  yaxis: { title: 'Faculty count', zeroline: true, zerolinewidth: 2, zerolinecolor: '#333' },
+  legend: { orientation: 'h', y: 1.15 },
+  margin: { t: 10, r: 20, b: 40, l: 50 },
+  plot_bgcolor: 'white', paper_bgcolor: 'white',
+  hoverlabel: { align: 'left', font: { size: 12 } },
+}, {responsive: true, displayModeBar: false});
+
+// ---- Count over time chart ----
+Plotly.newPlot('chart-count', [
+  {
+    name: 'Research stream', x: MC_DATES, y: MC_RESEARCH,
+    type: 'scatter', mode: 'lines+markers',
+    line: { color: '#1f77b4', width: 2 },
+    marker: { size: 4 },
+    hovertemplate: '<b>%{x}</b><br>Research: %{y}<extra></extra>',
+  },
+  {
+    name: 'Teaching stream', x: MC_DATES, y: MC_TEACHING,
+    type: 'scatter', mode: 'lines+markers',
+    line: { color: '#ff7f0e', width: 2 },
+    marker: { size: 4 },
+    hovertemplate: '<b>%{x}</b><br>Teaching: %{y}<extra></extra>',
+  },
+  ...(MC_UNKNOWN.some(v => v > 0) ? [{
+    name: 'Unclassified', x: MC_DATES, y: MC_UNKNOWN,
+    type: 'scatter', mode: 'lines',
+    line: { color: '#aaa', width: 1, dash: 'dot' },
+    hovertemplate: '<b>%{x}</b><br>Unclassified: %{y}<extra></extra>',
+  }] : []),
+], {
+  xaxis: { title: 'Date', tickfont: { size: 12 } },
+  yaxis: { title: 'Faculty on directory page', rangemode: 'tozero' },
+  legend: { orientation: 'h', y: 1.12 },
+  margin: { t: 10, r: 20, b: 40, l: 50 },
+  plot_bgcolor: 'white', paper_bgcolor: 'white',
+  hovermode: 'x unified',
+}, {responsive: true, displayModeBar: false});
+
+// ---- Table ----
+let sortCol = 'name', sortDir = 1;
+let streamFilter = 'all', statusFilter = 'all';
+
+function setStreamFilter(btn) {
+  document.querySelectorAll('[data-stream]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  streamFilter = btn.dataset.stream;
+  applyFilters();
+}
+
+function setStatusFilter(btn) {
+  document.querySelectorAll('[data-status]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  statusFilter = btn.dataset.status;
+  applyFilters();
+}
+
+function applyFilters() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const filtered = ROWS.filter(r => {
+    if (q && !r.name.toLowerCase().includes(q)) return false;
+    if (streamFilter !== 'all' && r.stream !== streamFilter) return false;
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    return true;
+  });
+  renderTable(filtered);
+}
+
+function renderTable(rows) {
+  const sorted = [...rows].sort((a, b) => {
+    let va = a[sortCol], vb = b[sortCol];
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    return va < vb ? -sortDir : va > vb ? sortDir : 0;
+  });
+
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = sorted.map(r => `
+    <tr>
+      <td>${r.name}</td>
+      <td class="stream-${r.stream}">${r.stream}</td>
+      <td>${r.conf_badge}</td>
+      <td>${r.first}</td>
+      <td>${r.last}</td>
+      <td class="status-${r.status}">${r.status}</td>
+      <td>${r.snapshots}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('no-results').style.display = sorted.length ? 'none' : 'block';
+  document.getElementById('table-count').textContent = `${sorted.length} / ${ROWS.length} faculty`;
+}
+
+// Column sort
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortDir *= -1;
+    else { sortCol = col; sortDir = 1; }
+    document.querySelectorAll('th').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
+    th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+    applyFilters();
+  });
+});
+
+// Initial render
+applyFilters();
+</script>
+</body>
+</html>
